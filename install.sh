@@ -69,7 +69,12 @@ if [[ -z "$DEST" ]]; then
   esac
 fi
 
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]:-${0:-}}"
+if [[ -n "$SCRIPT_PATH" && -f "$SCRIPT_PATH" ]]; then
+  SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd)"
+else
+  SCRIPT_DIR=""
+fi
 TMP_DIR=""
 
 cleanup() {
@@ -79,7 +84,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ -d "$SCRIPT_DIR/google-trends-hot-radar" && -d "$SCRIPT_DIR/google-trends-keyword-watch" ]]; then
+if [[ -n "$SCRIPT_DIR" && -d "$SCRIPT_DIR/google-trends-hot-radar" && -d "$SCRIPT_DIR/google-trends-keyword-watch" ]]; then
   SOURCE_DIR="$SCRIPT_DIR"
 else
   TMP_DIR="$(mktemp -d)"
