@@ -20,7 +20,7 @@
 ## 2. 执行流程
 
 1. 读取 `config.yaml`。
-2. 对启用的 monitor group，按 geo 抓取 RSS。
+2. 对启用的 monitor group，优先抓新版 Trending Now；失败时降级 RSS。
 3. 先列出原始热词样本，再做机会筛选。
 4. 按机会评分重新排序，不按 RSS rank 直接排序。
 5. 输出机会表、噪声排除表、待复核词、业务动作、归档候选。
@@ -28,8 +28,16 @@
 推荐命令：
 
 ```bash
+scripts/fetch-trending-now.py --geo US --hours 48 --category all --status all --sort relevance --limit 100 --format json
+```
+
+兼容旧 RSS 命令：
+
+```bash
 scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 ```
+
+新版 Trending Now 输出字段包括 `query`、`search_volume`、`increase_percentage`、`started_at`、`active`、`trend_breakdown`、`categories`、`source`。如果降级到 RSS，只能视为 `rss_limited` 的 Top 10 样本。
 
 ## 3. 机会评分
 
@@ -78,8 +86,9 @@ scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 
 ## 5. 质量规则
 
-- 不要因为某个固定品类没有出现在 RSS，就写“该品类没有趋势”。
+- 不要因为某个固定品类没有出现在 Trending Now/RSS，就写“该品类没有趋势”。
 - 只能写“当前热门词雷达没有发现与该品类直接相关的热搜”。
+- 当 `source=rss_limited` 时，必须说明 RSS 不是完整 Trending Now 列表。
 - 对热点噪声明确说不行动。
 - 产品机会必须说明迁移逻辑，例如“热点事件 -> 用户需求 -> 可产品化方向”。
 - 若迁移链条说不清，归为内容机会或噪声，不归为产品机会。

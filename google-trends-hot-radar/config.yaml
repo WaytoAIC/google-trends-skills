@@ -1,18 +1,21 @@
 skill:
   name: google-trends-hot-radar
   name_cn: Google Trends 热门词雷达
-  version: 1.0.0
+  version: 1.1.0
   language: zh-CN
   task_type: hot_radar
   description: "从 Google Trends 热门词中发现新品类、新内容、新市场机会。"
 
 tooling:
-  source: google_trends_rss
-  fetch_script: scripts/fetch-hot-trends.sh
+  source: google_trends_trending_now_with_rss_fallback
+  fetch_script: scripts/fetch-trending-now.py
+  compatibility_fetch_script: scripts/fetch-hot-trends.sh
   official_api_available: false
   data_boundary:
-    - "RSS/Trending Now 适合发现正在上升的通用热门词。"
-    - "approx_traffic 是 Google Trends RSS 暴露的近似流量标签，不是可用于销量测算的绝对搜索量。"
+    - "Trending Now 适合发现正在上升的通用热门词。"
+    - "新版 Trending Now 自动抓取依赖 Google 非公开接口，可能失败或被限流。"
+    - "RSS 只是降级兜底，通常不是完整 Trending Now 趋势池。"
+    - "search_volume / approx_traffic 是 Google Trends 暴露的近似流量标签，不是可用于销量测算的绝对搜索量。"
     - "热门词雷达不用于验证固定关键词曲线。"
 
 config_strategy:
@@ -30,8 +33,12 @@ schedule:
 monitoring_defaults:
   geos:
     - US
-  daily_rss_limit_per_geo: 20
-  lookback_days: 1
+  trend_hours: 48
+  category: all
+  status: all
+  sort: relevance
+  trending_limit_per_geo: 100
+  rss_fallback_limit_per_geo: 10
   exclude_exact_category_validation: true
   dedupe_across_geos: false
 

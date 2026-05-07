@@ -18,6 +18,12 @@ schedule:
 monitoring_defaults:
   geo: US
   time_range: today 12-m
+  category: 0
+  property: ""
+  mode: monitor
+  include_related: false
+  related_limit: 50
+  provider: auto
   snapshot_file: snapshots/keyword_watch_snapshots.jsonl
   max_keywords_per_group: 5
 
@@ -64,5 +70,8 @@ starter_checklist:
   - "这是固定关键词曲线任务，而不是热门词机会发现任务。"
   - "每组关键词不超过 5 个。"
   - "已明确 geo 和 time_range。"
+  - "需要 Top/Rising 相关查询时，优先配置 serpapi/searchapi provider 后再启用 include_related。"
   - "自动抓取失败时允许降级为复核链接。"
   - "Google Trends 订阅和 Google Alerts 只作为辅助提醒层。"
+  - "无 provider key 时默认优先走 Playwright，Playwright 不可用再走 Chrome 单关键词监控。"
+  - "浏览器返回 429 时只截图留证，不推断曲线。"

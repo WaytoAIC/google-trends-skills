@@ -66,9 +66,16 @@ def main():
             "-m",
             "py_compile",
             "google-trends-keyword-watch/scripts/keyword-watch.py",
+            "google-trends-hot-radar/scripts/fetch-trending-now.py",
+            "scripts/render-google-trends-report.py",
         ],
         root,
     )
+    for node_script in [
+        "google-trends-keyword-watch/scripts/chrome-trends-fetch.mjs",
+        "google-trends-keyword-watch/scripts/playwright-trends-fetch.mjs",
+    ]:
+        run(["node", "--check", node_script], root)
     run(["bash", "-n", "install.sh"], root)
     print("OK: Google Trends skills package validated")
 

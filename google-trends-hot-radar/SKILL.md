@@ -1,6 +1,6 @@
 ---
 name: google-trends-hot-radar
-version: 1.0.0
+version: 1.1.0
 description: "Use when the user wants Google Trends hot/trending keyword monitoring, general market radar, daily trending searches, new product or content opportunity discovery, or cross-market hot-word scanning. This skill discovers opportunities from trending terms outward; do not use it to validate a fixed keyword curve."
 license: MIT
 tags:
@@ -16,7 +16,7 @@ metadata:
 
 # Google Trends 热门词雷达
 
-本 skill 只解决一类任务：从 Google Trends 热门词 / RSS 中发现新品类、新内容、新市场机会。
+本 skill 只解决一类任务：从 Google Trends Trending Now / RSS 中发现新品类、新内容、新市场机会。
 
 它是“从外向内找机会”，不是拿一个固定品类去问“今天热搜有没有命中它”。如果用户已经给出明确关键词、品牌、竞品或配件词，要改用 `google-trends-keyword-watch`。
 
@@ -55,14 +55,21 @@ metadata:
 优先使用：
 
 ```bash
-scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
+scripts/fetch-trending-now.py --geo US --hours 48 --category all --status all --sort relevance --limit 100 --format json
 ```
 
 脚本能力：
 
-- 抓取 Google Trends RSS
-- 支持 `--geo`、`--limit`、`--format table|markdown|json`
-- 输出 title、approx traffic、pubDate、news titles、source_url
+- 优先抓取新版 Google Trends Trending Now 内部数据接口
+- 支持 `--geo`、`--hours 4|24|48|168`、`--category`、`--status all|active|ended`、`--sort relevance|volume|recency|title`、`--limit`、`--format json|markdown|csv`
+- 输出 query、search_volume、increase_percentage、started_at、active、trend_breakdown、categories、explore_url、source
+- 如果新版接口失败，自动降级到 RSS，并标记 `fetch_status=rss_limited`
+
+兼容旧 RSS 快速抓取：
+
+```bash
+scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
+```
 
 ## 核心规则
 
@@ -87,4 +94,4 @@ scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 - 是否把热门词雷达和关键词曲线监控分开？
 - 是否没有把无关热搜硬套到固定品类？
 - 是否按机会评分排序，而不是按热搜排名照搬？
-- 是否说明数据来自 Google Trends RSS，而不是绝对搜索量？
+- 是否说明数据来自 Google Trends Trending Now 或 RSS 降级，而不是绝对搜索量？

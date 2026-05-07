@@ -22,10 +22,15 @@
 1. 读取 `config.yaml`。
 2. 对启用的 watch group 执行关键词曲线抓取。
 3. 每组关键词最多 5 个，超过必须拆组。
-4. 成功抓取时输出曲线统计并保存快照。
-5. 失败时输出 `manual_review_required`，保留 Google Trends 链接，并把失败状态也写入快照用于排查。
-6. 同时生成 Google Trends 订阅入口和 Google Alerts 设置链接，作为辅助提醒层。
-7. 报告只基于成功抓取的数据判断上涨/下滑；失败项只写“待复核”。
+4. 无 provider key 时，优先检测本地 Playwright；可用则用 Playwright 打开 Google Trends 页面做单关键词串行监控，否则回落到 Chrome CDP。
+5. 成功抓取时输出曲线统计、完整 `interest_over_time` 点位，并保存快照。
+6. Playwright/Chrome provider 优先截获 `widgetdata/multiline` 网络 JSON；如果页面返回 429 或超时，只保存截图和复核链接。
+7. 多词输入会自动拆开，不能把不同词的 0-100 值做横向大小比较。
+8. Related Queries 和多词相对强弱对比优先使用 `--provider serpapi` 或 `--provider searchapi`；浏览器/Google 直连下不要为了相关查询反复打接口。
+9. 失败时输出 `manual_review_required`，保留 Google Trends 链接、`manual_export_url`、`screenshot_path`，并把失败状态也写入快照用于排查。
+10. 同时生成 Google Trends 订阅入口和 Google Alerts 设置链接，作为辅助提醒层。
+11. 报告只基于成功抓取的数据判断上涨/下滑；失败项只写“待复核”。
+12. Computer Use 只用于人工复核：打开页面、处理登录/验证码、手动下载 CSV 或截图，不作为自动化曲线数据源。
 
 推荐命令：
 
@@ -42,8 +47,11 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 | peak_value | 时间窗口内峰值 |
 | trend_direction | up / down / flat / unknown |
 | change_vs_previous | 最近值与上一时间点差值；若有历史快照，也可用于快照对比 |
-| fetch_status | success / manual_review_required |
+| interest_over_time | 完整曲线点位，含 time、formatted_time、values、is_partial |
+| related_queries | 每个关键词的 Top / Rising 相关查询 |
+| fetch_status | success / partial / manual_review_required |
 | source_url | Google Trends Explore 链接 |
+| manual_export_url | 自动抓取失败时用于人工 CSV 下载复核的 Explore 链接 |
 | subscription_url | Google Trends 订阅入口，需要用户登录 Google 账号手动添加 |
 | google_alerts_url | 单个关键词的 Google Alerts 设置链接，可选择邮件或 RSS |
 
@@ -98,6 +106,7 @@ Google Trends 订阅和 Google Alerts 可以提高长期监控稳定性，但它
 ## 6. 质量规则
 
 - 自动抓取失败时，不输出 `up/down/flat`。
+- 如果曲线成功但相关查询失败，标记 `partial`，不要把相关查询缺失当成曲线失败。
 - 不使用热门词 RSS 作为曲线证据。
 - 关键词曲线只能说明搜索兴趣，不直接等于销量、转化率或利润。
 - Google Trends 订阅和 Google Alerts 必须标注为辅助提醒，不得写成曲线数据源。

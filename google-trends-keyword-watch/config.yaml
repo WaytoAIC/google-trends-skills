@@ -8,13 +8,17 @@ skill:
 
 tooling:
   watch_script: scripts/keyword-watch.py
+  playwright_fallback_script: scripts/playwright-trends-fetch.mjs
+  chrome_fallback_script: scripts/chrome-trends-fetch.mjs
   setup_links_script: scripts/keyword-watch.py
   source: google_trends_explore
   official_api_available: false
-  fallback_behavior: manual_review_link
+  fallback_behavior: provider_api_then_playwright_then_chrome_network_json_then_screenshot_then_manual_review_link
   data_boundary:
     - "Google Trends 曲线是 0-100 相对热度，不是绝对搜索量。"
     - "自动抓取依赖 Google Trends Explore 非公开接口，可能失败。"
+    - "无商业 provider 时优先走 Playwright（若本地可 import），否则走真实 Chrome 单关键词监控。"
+    - "如果浏览器页面也返回 429，只能截图留证并人工复核。"
     - "自动抓取失败时必须降级为复核链接，不得编造曲线结论。"
     - "Google Trends 订阅和 Google Alerts 是辅助提醒层，不是曲线数据源。"
 
@@ -35,6 +39,10 @@ monitoring_defaults:
   time_range: today 12-m
   category: 0
   property: ""
+  mode: monitor
+  include_related: false
+  related_limit: 50
+  provider: auto
   snapshot_file: snapshots/keyword_watch_snapshots.jsonl
   save_snapshot: true
   max_keywords_per_group: 5
@@ -89,6 +97,7 @@ business_context:
     - "不要把相对热度写成绝对搜索量。"
     - "自动抓取失败时不要推断上涨或下跌。"
     - "关键词超过 5 个时必须拆组。"
+    - "Chrome 单关键词模式下，不要把不同关键词各自归一化后的 0-100 数值做横向大小比较。"
 
 watch_groups:
   - group_id: ai_glasses_brand_accessory_watch

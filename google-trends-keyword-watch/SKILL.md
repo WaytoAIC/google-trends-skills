@@ -62,11 +62,20 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 脚本能力：
 
 - 每组最多 5 个关键词
+- `--provider auto` 会优先使用 `SERPAPI_API_KEY` / `SEARCHAPI_API_KEY`；没有 key 时检测本地 Playwright，能用就走 `playwright`，否则走真实 Chrome 单关键词监控
+- Playwright provider 需要 Node 能 `import('playwright')`；不可用时不要报错阻塞，自动回落到 Chrome provider
+- Chrome provider 会打开 Google Trends Explore 页面，优先截获 `widgetdata/multiline` 网络 JSON；失败时保存截图和复核链接
+- Google Trends 直连 `--provider google` 只作为低频备用，不作为默认路径
+- 无商业 provider 时，只做单词自身曲线监控
 - 尝试自动抓 Google Trends Explore interest-over-time 数据
+- Related Queries Top / Rising 只建议在 `serpapi` / `searchapi` provider 下启用
+- 输出 `interest_over_time` 完整点位
 - 输出 latest_value、avg_value、peak_value、trend_direction、change_vs_previous、fetch_status、source_url
+- 输出 `manual_export_url`，用于自动抓取失败时人工下载 CSV 复核
 - 输出 `subscription_url` 和每个关键词的 `google_alerts_url`
 - 默认追加快照；自动抓取失败时也记录 `fetch_status=manual_review_required`
 - 失败时输出 `fetch_status=manual_review_required` 和 Google Trends 复核链接
+- 输出 `provider`、`chrome_fetch_method=network_json|screenshot_only`、`screenshot_path`，用于区分拿到结构化曲线还是仅截图留证
 
 ## 核心规则
 
@@ -76,6 +85,10 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 4. 自动抓取失败不能编造曲线结论。
 5. Google Trends 订阅和 Google Alerts 只是辅助提醒层，不替代曲线数据。
 6. 报告必须区分：已自动确认、待人工复核、证据不足、订阅/Alerts 待用户设置。
+7. Playwright / Chrome / Google 直连不要并发请求；多关键词输入必须按单词串行监控，数值不能做横向大小比较。
+8. 多词相对强弱对比和 Related Queries 如果需要稳定输出，必须切换 provider 或人工 CSV 复核。
+9. 浏览器页面如果返回 429，只能输出截图、复核链接和 `manual_review_required`，不得推断曲线。
+10. Computer Use 只作为人工复核工作法，不作为自动化数据源写入脚本主流程。
 
 ## 输出要求
 

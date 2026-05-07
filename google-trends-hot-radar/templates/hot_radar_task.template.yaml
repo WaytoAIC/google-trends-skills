@@ -18,8 +18,12 @@ schedule:
 monitoring_defaults:
   geos:
     - US
-  daily_rss_limit_per_geo: 20
-  lookback_days: 1
+  trend_hours: 48
+  category: all
+  status: all
+  sort: relevance
+  trending_limit_per_geo: 100
+  rss_fallback_limit_per_geo: 10
 
 curation_defaults:
   industry_lenses:
@@ -52,4 +56,5 @@ monitor_groups:
 starter_checklist:
   - "这是热门词机会发现任务，而不是固定关键词曲线任务。"
   - "geo 控制在 1-3 个核心市场。"
-  - "行业 lens 只用于筛选机会，不用于要求 RSS 命中特定词。"
+  - "行业 lens 只用于筛选机会，不用于要求 Trending Now 命中特定词。"
+  - "如果降级到 RSS，报告必须标记它不是完整趋势池。"
