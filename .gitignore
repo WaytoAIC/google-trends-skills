@@ -1,0 +1,11 @@
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.cache/
+tmp/
+*.log
+
+google-trends-keyword-watch/snapshots/*.jsonl
+google-trends-hot-radar/reports/*.md
+google-trends-keyword-watch/reports/*.md

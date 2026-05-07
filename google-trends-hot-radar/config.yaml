@@ -1,0 +1,118 @@
+skill:
+  name: google-trends-hot-radar
+  name_cn: Google Trends 热门词雷达
+  version: 1.0.0
+  language: zh-CN
+  task_type: hot_radar
+  description: "从 Google Trends 热门词中发现新品类、新内容、新市场机会。"
+
+tooling:
+  source: google_trends_rss
+  fetch_script: scripts/fetch-hot-trends.sh
+  official_api_available: false
+  data_boundary:
+    - "RSS/Trending Now 适合发现正在上升的通用热门词。"
+    - "approx_traffic 是 Google Trends RSS 暴露的近似流量标签，不是可用于销量测算的绝对搜索量。"
+    - "热门词雷达不用于验证固定关键词曲线。"
+
+config_strategy:
+  recommendation: one_task_one_config
+  starter_template_path: templates/hot_radar_task.template.yaml
+  config_naming_pattern: "configs/<task_slug>.yaml"
+  split_when_goals_are_unrelated: true
+
+schedule:
+  timezone: America/Los_Angeles
+  daily_digest_time: "09:00"
+  weekly_report_day: "MON"
+  weekly_report_time: "09:30"
+
+monitoring_defaults:
+  geos:
+    - US
+  daily_rss_limit_per_geo: 20
+  lookback_days: 1
+  exclude_exact_category_validation: true
+  dedupe_across_geos: false
+
+opportunity_scoring:
+  min_score_for_report: 65
+  min_score_for_archive: 80
+  dimensions:
+    business_relevance: 30
+    demand_migration_potential: 25
+    productization_potential: 20
+    content_leverage: 15
+    noise_risk_inverse: 10
+
+curation_defaults:
+  opportunity_types:
+    - product_opportunity
+    - content_opportunity
+    - seasonal_opportunity
+    - ad_angle
+    - market_watch
+    - noise
+  industry_lenses:
+    - ecommerce
+    - amazon
+    - consumer_products
+    - tech_accessories
+    - home_lifestyle
+  exclude_topics:
+    - celebrity_gossip_without_product_angle
+    - politics_without_market_relevance
+    - crime_without_business_relevance
+    - sports_score_only
+    - finance_news_without_consumer_product_angle
+
+reporting:
+  output_language: zh-CN
+  tables_first: true
+  required_sections:
+    - executive_summary
+    - opportunity_table
+    - noise_exclusion_table
+    - manual_review_terms
+    - business_actions
+    - archive_candidates
+
+archive:
+  archive_file: archives/hot_signal_archive.md
+  archive_when:
+    - "同一主题跨 geo 命中"
+    - "热词可迁移到明确产品、内容、广告或市场动作"
+    - "同类热词在一周内重复出现"
+  merge_key_fields:
+    - normalized_hot_term
+    - opportunity_type
+
+business_context:
+  default_use_case:
+    - 跨境选品
+    - 品牌/竞品观察
+    - 内容选题
+  banned_assumptions:
+    - "不要把热搜排名直接当机会排名。"
+    - "不要用固定品类去要求 RSS 直接命中。"
+    - "不要把新闻热点直接等同为可卖产品机会。"
+    - "不要把 Google Trends 近似流量解释成销量或需求规模。"
+
+monitor_groups:
+  - group_id: ecommerce_hot_opportunity_scan
+    group_name_cn: 跨境电商热门词机会扫描
+    enabled: true
+    priority: 5
+    geos:
+      - US
+      - GB
+      - JP
+    goal_cn:
+      - "从每日热门词中识别可能迁移为产品、内容、广告或市场观察的机会。"
+    report_focus_cn:
+      - "优先输出能服务跨境选品、品牌/竞品观察和内容选题的热词。"
+    industry_lenses:
+      - ecommerce
+      - consumer_products
+      - tech_accessories
+      - home_lifestyle

@@ -1,0 +1,68 @@
+skill:
+  name: google-trends-keyword-watch
+  task_name: "<task_slug>"
+  task_name_cn: "<中文任务名>"
+  language: zh-CN
+
+business_context:
+  market: "<例如 Amazon US / DTC US>"
+  primary_goal_cn: "<监控这些关键词是为了支持什么决策>"
+  report_consumer_cn: "<产品/运营/广告负责人>"
+
+schedule:
+  timezone: America/Los_Angeles
+  daily_check_time: "09:00"
+  weekly_report_day: "MON"
+  weekly_report_time: "09:30"
+
+monitoring_defaults:
+  geo: US
+  time_range: today 12-m
+  snapshot_file: snapshots/keyword_watch_snapshots.jsonl
+  max_keywords_per_group: 5
+
+subscription_layer:
+  google_trends_subscription: true
+  trends_subscription_url: https://trends.google.com/trends/subscriptions
+  recommended_frequency: weekly
+
+google_alerts_layer:
+  google_alerts: true
+  alerts_base_url: https://www.google.com/alerts
+  recommended_frequency: daily
+  delivery_options:
+    - email
+    - rss
+
+alert_thresholds:
+  latest_vs_avg_up_pct: 30
+  latest_vs_avg_down_pct: -30
+  latest_vs_previous_up_points: 15
+  latest_vs_previous_down_points: -15
+
+watch_groups:
+  - group_id: "<english_group_id>"
+    group_name_cn: "<中文组名>"
+    enabled: true
+    priority: 5
+    geo: US
+    time_range: today 12-m
+    baseline_keyword: "<基准词>"
+    keywords:
+      - "<关键词 1>"
+      - "<关键词 2>"
+    goal_cn:
+      - "<这个关键词组要回答什么问题>"
+    report_focus_cn:
+      - "<报告最该强调什么>"
+    auxiliary_alerts:
+      google_trends_subscription: true
+      google_alerts: true
+      alerts_frequency: daily
+
+starter_checklist:
+  - "这是固定关键词曲线任务，而不是热门词机会发现任务。"
+  - "每组关键词不超过 5 个。"
+  - "已明确 geo 和 time_range。"
+  - "自动抓取失败时允许降级为复核链接。"
+  - "Google Trends 订阅和 Google Alerts 只作为辅助提醒层。"

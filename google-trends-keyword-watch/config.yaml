@@ -1,0 +1,114 @@
+skill:
+  name: google-trends-keyword-watch
+  name_cn: Google Trends 关键词曲线监控
+  version: 1.1.0
+  language: zh-CN
+  task_type: keyword_watch
+  description: "监控已知关键词、品牌词、竞品词、品类词、配件词的 Google Trends 曲线变化。"
+
+tooling:
+  watch_script: scripts/keyword-watch.py
+  setup_links_script: scripts/keyword-watch.py
+  source: google_trends_explore
+  official_api_available: false
+  fallback_behavior: manual_review_link
+  data_boundary:
+    - "Google Trends 曲线是 0-100 相对热度，不是绝对搜索量。"
+    - "自动抓取依赖 Google Trends Explore 非公开接口，可能失败。"
+    - "自动抓取失败时必须降级为复核链接，不得编造曲线结论。"
+    - "Google Trends 订阅和 Google Alerts 是辅助提醒层，不是曲线数据源。"
+
+config_strategy:
+  recommendation: one_task_one_config
+  starter_template_path: templates/keyword_watch_task.template.yaml
+  config_naming_pattern: "configs/<task_slug>.yaml"
+  max_keywords_per_group: 5
+
+schedule:
+  timezone: America/Los_Angeles
+  daily_check_time: "09:00"
+  weekly_report_day: "MON"
+  weekly_report_time: "09:30"
+
+monitoring_defaults:
+  geo: US
+  time_range: today 12-m
+  category: 0
+  property: ""
+  snapshot_file: snapshots/keyword_watch_snapshots.jsonl
+  save_snapshot: true
+  max_keywords_per_group: 5
+
+alert_thresholds:
+  latest_vs_avg_up_pct: 30
+  latest_vs_avg_down_pct: -30
+  latest_vs_previous_up_points: 15
+  latest_vs_previous_down_points: -15
+  min_peak_value_to_care: 20
+
+reporting:
+  output_language: zh-CN
+  tables_first: true
+  required_sections:
+    - executive_summary
+    - curve_change_summary
+    - keyword_comparison
+    - anomaly_alerts
+    - seasonality_or_continuity
+    - next_actions
+    - manual_review_links
+    - subscription_and_alerts_setup
+
+subscription_layer:
+  enabled: true
+  trends_subscription_url: https://trends.google.com/trends/subscriptions
+  purpose: "为固定关键词设置 Google Trends 官方订阅，作为低频趋势变化提醒兜底。"
+  recommended_frequency: weekly
+  limitations:
+    - "需要用户登录 Google 账号手动设置。"
+    - "通知频率和内容由 Google 决定，不能作为完整曲线数据。"
+
+google_alerts_layer:
+  enabled: true
+  alerts_base_url: https://www.google.com/alerts
+  purpose: "监控关键词相关新闻、网页、帖子和新品信息，补充趋势背后的内容动态。"
+  recommended_frequency: daily
+  delivery_options:
+    - email
+    - rss
+  limitations:
+    - "Google Alerts 不是 Google Trends 数据。"
+    - "Alerts 反映网页/新闻更新，不等于搜索热度上涨。"
+
+business_context:
+  default_use_case:
+    - 跨境选品
+    - 品牌/竞品观察
+  banned_assumptions:
+    - "不要用热门词 RSS 判断固定关键词走势。"
+    - "不要把相对热度写成绝对搜索量。"
+    - "自动抓取失败时不要推断上涨或下跌。"
+    - "关键词超过 5 个时必须拆组。"
+
+watch_groups:
+  - group_id: ai_glasses_brand_accessory_watch
+    group_name_cn: AI 眼镜品牌与配件词监控
+    enabled: true
+    priority: 5
+    geo: US
+    time_range: today 12-m
+    baseline_keyword: smart glasses
+    keywords:
+      - smart glasses
+      - AI glasses
+      - Ray-Ban Meta
+      - Xreal Air
+      - Ray-Ban Meta accessories
+    goal_cn:
+      - "观察 AI 眼镜品类、品牌和配件词是否出现上涨、下滑或异常波动。"
+    report_focus_cn:
+      - "优先判断品牌热度和配件需求是否值得继续进入 Reddit/Amazon/SIF 验证。"
+    auxiliary_alerts:
+      google_trends_subscription: true
+      google_alerts: true
+      alerts_frequency: daily
