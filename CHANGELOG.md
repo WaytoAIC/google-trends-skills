@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- No unreleased changes.
+- Improved README project section with Chinese-first bilingual documentation.
 
 ## v1.0.0 - 2026-05-07
 
