@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Improved README project section with Chinese-first bilingual documentation.
+- Reorganized README project section into separate Chinese-first and English sections.
 
 ## v1.0.0 - 2026-05-07
 
