@@ -1,6 +1,6 @@
 ---
 name: google-trends-hot-radar
-version: 1.1.0
+version: 1.2.0
 description: "Use when the user wants Google Trends hot/trending keyword monitoring, general market radar, daily trending searches, new product or content opportunity discovery, or cross-market hot-word scanning. This skill discovers opportunities from trending terms outward; do not use it to validate a fixed keyword curve."
 license: MIT
 tags:
@@ -48,6 +48,7 @@ metadata:
 按需读取：
 
 - `templates/hot_radar_task.template.yaml`
+- `templates/hot_radar_report.template.json`
 - `archives/hot_signal_archive.md`
 
 ## 工具
@@ -71,6 +72,19 @@ scripts/fetch-trending-now.py --geo US --hours 48 --category all --status all --
 scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 ```
 
+生成 HTML 可视化页面：
+
+```bash
+scripts/render-hot-radar-html.py --report-json /tmp/hot-radar-report.json --output reports/hot-radar.html
+```
+
+HTML 渲染脚本能力：
+
+- 输入经过机会筛选后的结构化 report JSON，模板见 `templates/hot_radar_report.template.json`
+- 输出单文件 HTML，内置 CSS / SVG 风格组件 / 原生 JS 筛选，不依赖外部前端库
+- 页面包含顶部结论、关键指标、机会评分卡、机会类型筛选、噪声排除表、待复核词、业务动作、归档候选
+- 只负责渲染已经判断过的机会，不替代人工/Agent 的机会评分
+
 ## 核心规则
 
 1. 先跑热门词，再判断业务意义。
@@ -85,6 +99,7 @@ scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 - 表格优先
 - 必须包含：机会表、噪声排除表、待复核词、业务动作、归档候选
 - 明确区分：产品机会、内容机会、季节性机会、广告角度、噪声热点
+- 如果用户要求 HTML / 可视化页面，要同时生成结构化 report JSON 和 HTML 页面
 - 如果没有高价值信号，要直接说“今天没有值得行动的热搜机会”
 
 ## 自检
@@ -95,3 +110,4 @@ scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 - 是否没有把无关热搜硬套到固定品类？
 - 是否按机会评分排序，而不是按热搜排名照搬？
 - 是否说明数据来自 Google Trends Trending Now 或 RSS 降级，而不是绝对搜索量？
+- 如果生成 HTML，是否先完成机会判断，再把结构化 JSON 交给渲染脚本？

@@ -142,7 +142,43 @@ google-trends-keyword-watch/scripts/keyword-watch.py \
 
 ## 可视化 HTML 报告
 
-两个脚本都支持 JSON 输出，可以合并渲染为本地 HTML。报告内置 SVG 和原生 JS，不依赖外部前端库。
+`google-trends-keyword-watch` 内置了关键词监控 HTML 渲染器，可以把自动 JSON 或人工下载的 Google Trends CSV 转成可浏览决策报告。报告不依赖外部前端库。
+
+关键词监控 HTML：
+
+```bash
+python3 google-trends-keyword-watch/scripts/keyword-watch.py \
+  --geo US --time "today 12-m" --keywords "mother's day" "mother's day gifts" \
+  --format json --no-save > /tmp/google-trends-keyword.json
+
+python3 google-trends-keyword-watch/scripts/render-keyword-watch-html.py \
+  --keyword-json /tmp/google-trends-keyword.json \
+  --output reports/keyword-watch.html \
+  --title "Google Trends 关键词曲线监控"
+```
+
+热门词雷达 HTML：
+
+```bash
+python3 google-trends-hot-radar/scripts/render-hot-radar-html.py \
+  --report-json /tmp/hot-radar-report.json \
+  --output reports/us-hot-radar.html
+```
+
+`/tmp/hot-radar-report.json` 需要先按 `google-trends-hot-radar/templates/hot_radar_report.template.json` 整理。这个步骤必须在机会评分之后执行，避免把原始热搜排名直接当成机会排名。
+
+人工 CSV 复核转 HTML：
+
+```bash
+python3 google-trends-keyword-watch/scripts/render-keyword-watch-html.py \
+  --manual-csv ~/Downloads/multiTimeline.csv \
+  --geo US \
+  --time-range "today 12-m" \
+  --output reports/manual-keyword-watch.html \
+  --title "Google Trends 人工复核报告"
+```
+
+如果还需要把 Keyword Watch 和 Trending Now 合并成一个总览页，可以使用仓库根目录的组合 renderer：
 
 ```bash
 python3 google-trends-keyword-watch/scripts/keyword-watch.py \
@@ -180,13 +216,16 @@ google-trends-hot-radar/
   skills.md
   scripts/fetch-trending-now.py
   scripts/fetch-hot-trends.sh
+  scripts/render-hot-radar-html.py
   templates/hot_radar_task.template.yaml
+  templates/hot_radar_report.template.json
 
 google-trends-keyword-watch/
   SKILL.md
   config.yaml
   skills.md
   scripts/keyword-watch.py
+  scripts/render-keyword-watch-html.py
   templates/keyword_watch_task.template.yaml
 
 install.sh
@@ -202,7 +241,9 @@ python3 scripts/quick_validate.py .
 bash -n google-trends-hot-radar/scripts/fetch-hot-trends.sh
 PYTHONPYCACHEPREFIX=/tmp/google-trends-pycache python3 -m py_compile \
   google-trends-keyword-watch/scripts/keyword-watch.py \
+  google-trends-keyword-watch/scripts/render-keyword-watch-html.py \
   google-trends-hot-radar/scripts/fetch-trending-now.py \
+  google-trends-hot-radar/scripts/render-hot-radar-html.py \
   scripts/render-google-trends-report.py
 ```
 
@@ -290,7 +331,43 @@ google-trends-keyword-watch/scripts/keyword-watch.py \
 
 ## HTML Report
 
-Both scripts support JSON output and can be rendered into a local HTML report. The renderer uses inline SVG and native JavaScript only.
+`google-trends-keyword-watch` now includes a standalone keyword-watch HTML renderer. It can render either automatic JSON output or a manually downloaded Google Trends CSV into a local decision report. The report uses no external frontend library.
+
+Keyword Watch HTML:
+
+```bash
+python3 google-trends-keyword-watch/scripts/keyword-watch.py \
+  --geo US --time "today 12-m" --keywords "mother's day" "mother's day gifts" \
+  --format json --no-save > /tmp/google-trends-keyword.json
+
+python3 google-trends-keyword-watch/scripts/render-keyword-watch-html.py \
+  --keyword-json /tmp/google-trends-keyword.json \
+  --output reports/keyword-watch.html \
+  --title "Google Trends Keyword Watch"
+```
+
+Hot Radar HTML:
+
+```bash
+python3 google-trends-hot-radar/scripts/render-hot-radar-html.py \
+  --report-json /tmp/hot-radar-report.json \
+  --output reports/us-hot-radar.html
+```
+
+Prepare `/tmp/hot-radar-report.json` from `google-trends-hot-radar/templates/hot_radar_report.template.json` after the opportunity scoring step. Raw Trending Now rank should not be treated as opportunity rank.
+
+Manual CSV review to HTML:
+
+```bash
+python3 google-trends-keyword-watch/scripts/render-keyword-watch-html.py \
+  --manual-csv ~/Downloads/multiTimeline.csv \
+  --geo US \
+  --time-range "today 12-m" \
+  --output reports/manual-keyword-watch.html \
+  --title "Google Trends Manual Review"
+```
+
+For a combined Keyword Watch + Trending Now overview, use the root renderer:
 
 ```bash
 python3 google-trends-keyword-watch/scripts/keyword-watch.py \
@@ -325,13 +402,16 @@ google-trends-hot-radar/
   skills.md
   scripts/fetch-trending-now.py
   scripts/fetch-hot-trends.sh
+  scripts/render-hot-radar-html.py
   templates/hot_radar_task.template.yaml
+  templates/hot_radar_report.template.json
 
 google-trends-keyword-watch/
   SKILL.md
   config.yaml
   skills.md
   scripts/keyword-watch.py
+  scripts/render-keyword-watch-html.py
   templates/keyword_watch_task.template.yaml
 
 install.sh
@@ -347,7 +427,9 @@ python3 scripts/quick_validate.py .
 bash -n google-trends-hot-radar/scripts/fetch-hot-trends.sh
 PYTHONPYCACHEPREFIX=/tmp/google-trends-pycache python3 -m py_compile \
   google-trends-keyword-watch/scripts/keyword-watch.py \
+  google-trends-keyword-watch/scripts/render-keyword-watch-html.py \
   google-trends-hot-radar/scripts/fetch-trending-now.py \
+  google-trends-hot-radar/scripts/render-hot-radar-html.py \
   scripts/render-google-trends-report.py
 ```
 

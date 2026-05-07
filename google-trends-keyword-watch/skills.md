@@ -30,12 +30,26 @@
 9. 失败时输出 `manual_review_required`，保留 Google Trends 链接、`manual_export_url`、`screenshot_path`，并把失败状态也写入快照用于排查。
 10. 同时生成 Google Trends 订阅入口和 Google Alerts 设置链接，作为辅助提醒层。
 11. 报告只基于成功抓取的数据判断上涨/下滑；失败项只写“待复核”。
-12. Computer Use 只用于人工复核：打开页面、处理登录/验证码、手动下载 CSV 或截图，不作为自动化曲线数据源。
+12. 如果用户要求 HTML 页面，使用 `scripts/render-keyword-watch-html.py` 生成本地静态 HTML 决策报告。
+13. Computer Use 只用于人工复核：打开页面、处理登录/验证码、手动下载 CSV 或截图。人工下载的 `multiTimeline.csv` 可以作为 `render-keyword-watch-html.py --manual-csv` 输入，但报告必须标注为人工导出数据。
 
 推荐命令：
 
 ```bash
 python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart glasses" "AI glasses" "Ray-Ban Meta" "Xreal Air" "Ray-Ban Meta accessories"
+```
+
+HTML 报告命令：
+
+```bash
+python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart glasses" "AI glasses" --format json --no-save > /tmp/keyword-watch.json
+python3 scripts/render-keyword-watch-html.py --keyword-json /tmp/keyword-watch.json --output reports/keyword-watch.html --title "Google Trends 关键词曲线监控"
+```
+
+人工 CSV 复核转 HTML：
+
+```bash
+python3 scripts/render-keyword-watch-html.py --manual-csv ~/Downloads/multiTimeline.csv --geo US --time-range "today 12-m" --output reports/manual-keyword-watch.html --title "Google Trends 人工复核报告"
 ```
 
 ## 3. 字段解释
@@ -54,6 +68,7 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 | manual_export_url | 自动抓取失败时用于人工 CSV 下载复核的 Explore 链接 |
 | subscription_url | Google Trends 订阅入口，需要用户登录 Google 账号手动添加 |
 | google_alerts_url | 单个关键词的 Google Alerts 设置链接，可选择邮件或 RSS |
+| html_report | 由 `render-keyword-watch-html.py` 生成的本地静态报告文件 |
 
 ## 4. 辅助提醒层
 
@@ -102,6 +117,13 @@ Google Trends 订阅和 Google Alerts 可以提高长期监控稳定性，但它
 | 关键词/入口 | 链接 | 用途 | 状态 |
 |---|---|---|---|
 ```
+
+## 5.1 HTML 报告要求
+
+- HTML 报告必须以结论和动作建议开头，不要把抓取失败过程放在主视觉区。
+- 当输入来自人工 CSV 时，写明数据来源是 `manual Google Trends CSV`。
+- 必须包含：关键指标卡片、数据摘要表、下一步动作、数据边界。
+- 不依赖外部 CSS/JS/CDN，生成后直接用浏览器打开。
 
 ## 6. 质量规则
 

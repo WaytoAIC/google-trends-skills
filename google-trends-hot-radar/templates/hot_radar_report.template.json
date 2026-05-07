@@ -1,0 +1,64 @@
+{
+  "title": "Google Trends 热门词雷达 - US - 2026-05-07",
+  "geo": "US",
+  "hours": 48,
+  "source": "google_trending_now",
+  "source_url": "https://trends.google.com/trending?geo=US&hl=en&hours=48",
+  "fetch_status": "success",
+  "generated_at": "2026-05-07 15:00:00",
+  "summary": {
+    "verdict": "今天有可行动机会，但不适合直接按热搜排名选品。",
+    "detail": "按商业相关性、需求迁移、产品化、内容杠杆和噪声风险重排。",
+    "raw_count": 100,
+    "opportunity_count": 3,
+    "high_value_count": 1,
+    "archive_candidate_count": 1
+  },
+  "opportunities": [
+    {
+      "rank": 1,
+      "term": "example hot term",
+      "geo": "US",
+      "opportunity_type": [
+        "product_opportunity",
+        "seasonal_opportunity"
+      ],
+      "tags": [
+        "Shopping",
+        "夏季"
+      ],
+      "score": 85,
+      "why": "热点背后有明确消费场景，可迁移为产品或内容机会。",
+      "action": "复核 Amazon 竞品、价格带、评论痛点和广告合规边界。"
+    }
+  ],
+  "noise_exclusions": [
+    {
+      "term": "example noise term",
+      "geo": "US",
+      "reason": "一次性新闻或娱乐噪声，缺少清晰消费迁移链。"
+    }
+  ],
+  "manual_review_terms": [
+    {
+      "term": "example review term",
+      "review_focus": "是否形成平台外溢需求",
+      "review_method": "Google Trends Explore、Amazon 搜索、Reddit/TikTok 复核"
+    }
+  ],
+  "business_actions": [
+    {
+      "action": "快速选品扫描",
+      "terms": "example hot term",
+      "owner": "运营",
+      "execution": "拉 Amazon 前 20 竞品，拆价格、材质、评论痛点和主图表达。"
+    }
+  ],
+  "archive_candidates": [
+    {
+      "hot_signal_key": "us_yyyymmdd_example_hot_signal",
+      "reason": "同一主题可迁移到明确产品、内容或市场动作。",
+      "status": "watching"
+    }
+  ]
+}

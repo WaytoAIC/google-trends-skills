@@ -10,6 +10,7 @@ tooling:
   watch_script: scripts/keyword-watch.py
   playwright_fallback_script: scripts/playwright-trends-fetch.mjs
   chrome_fallback_script: scripts/chrome-trends-fetch.mjs
+  html_report_script: scripts/render-keyword-watch-html.py
   setup_links_script: scripts/keyword-watch.py
   source: google_trends_explore
   official_api_available: false
@@ -57,6 +58,16 @@ alert_thresholds:
 reporting:
   output_language: zh-CN
   tables_first: true
+  html_report:
+    enabled: true
+    renderer: scripts/render-keyword-watch-html.py
+    inputs:
+      - keyword_watch_json
+      - manual_google_trends_csv
+    requirements:
+      - "HTML 报告优先呈现结论、数据表和下一步动作，不展示无效抓取过程。"
+      - "人工 CSV 输入必须标注为 manual Google Trends CSV。"
+      - "HTML 必须为本地静态文件，不依赖外部前端库。"
   required_sections:
     - executive_summary
     - curve_change_summary

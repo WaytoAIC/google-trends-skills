@@ -24,6 +24,7 @@
 3. 先列出原始热词样本，再做机会筛选。
 4. 按机会评分重新排序，不按 RSS rank 直接排序。
 5. 输出机会表、噪声排除表、待复核词、业务动作、归档候选。
+6. 如果用户要求 HTML / 可视化页面，先把筛选结果整理成结构化 report JSON，再用 `scripts/render-hot-radar-html.py` 渲染为本地 HTML。
 
 推荐命令：
 
@@ -37,7 +38,17 @@ scripts/fetch-trending-now.py --geo US --hours 48 --category all --status all --
 scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 ```
 
+HTML 可视化命令：
+
+```bash
+scripts/render-hot-radar-html.py \
+  --report-json /tmp/hot-radar-report.json \
+  --output reports/hot-radar.html
+```
+
 新版 Trending Now 输出字段包括 `query`、`search_volume`、`increase_percentage`、`started_at`、`active`、`trend_breakdown`、`categories`、`source`。如果降级到 RSS，只能视为 `rss_limited` 的 Top 10 样本。
+
+`render-hot-radar-html.py` 的输入不是原始 Trending Now JSON，而是已经完成机会判断后的 report JSON。字段模板见 `templates/hot_radar_report.template.json`。这样可以避免把原始热搜排名直接伪装成机会排名。
 
 ## 3. 机会评分
 
@@ -92,3 +103,4 @@ scripts/fetch-hot-trends.sh --geo US --limit 20 --format json
 - 对热点噪声明确说不行动。
 - 产品机会必须说明迁移逻辑，例如“热点事件 -> 用户需求 -> 可产品化方向”。
 - 若迁移链条说不清，归为内容机会或噪声，不归为产品机会。
+- HTML 页面只做结果呈现，不替代机会评分；页面中的机会卡必须来自已筛选后的机会表。

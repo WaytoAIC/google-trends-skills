@@ -30,6 +30,7 @@ metadata:
 - 跟踪 `smart glasses`、`AI glasses`、`Ray-Ban Meta`、`Xreal Air` 这类固定词
 - 为固定关键词生成 Google Trends 订阅和 Google Alerts 设置链接
 - 每日 / 每周关键词变化报告
+- 把自动 JSON 或人工下载的 Google Trends CSV 渲染成可浏览 HTML 决策报告
 
 不要使用本 skill：
 
@@ -76,6 +77,20 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 - 默认追加快照；自动抓取失败时也记录 `fetch_status=manual_review_required`
 - 失败时输出 `fetch_status=manual_review_required` 和 Google Trends 复核链接
 - 输出 `provider`、`chrome_fetch_method=network_json|screenshot_only`、`screenshot_path`，用于区分拿到结构化曲线还是仅截图留证
+- `scripts/render-keyword-watch-html.py` 可以把 `keyword-watch.py --format json` 的结果，或人工下载的 Google Trends `multiTimeline.csv`，渲染成本地 HTML 报告
+
+HTML 报告：
+
+```bash
+python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "mother's day" "mother's day gifts" --format json --no-save > /tmp/keyword-watch.json
+python3 scripts/render-keyword-watch-html.py --keyword-json /tmp/keyword-watch.json --output reports/keyword-watch.html --title "Google Trends 关键词监控"
+```
+
+如果自动抓取失败但人工下载了 `Interest over time` CSV：
+
+```bash
+python3 scripts/render-keyword-watch-html.py --manual-csv ~/Downloads/multiTimeline.csv --geo US --time-range "today 12-m" --output reports/keyword-watch.html --title "Google Trends 人工复核报告"
+```
 
 ## 核心规则
 
@@ -88,13 +103,15 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 7. Playwright / Chrome / Google 直连不要并发请求；多关键词输入必须按单词串行监控，数值不能做横向大小比较。
 8. 多词相对强弱对比和 Related Queries 如果需要稳定输出，必须切换 provider 或人工 CSV 复核。
 9. 浏览器页面如果返回 429，只能输出截图、复核链接和 `manual_review_required`，不得推断曲线。
-10. Computer Use 只作为人工复核工作法，不作为自动化数据源写入脚本主流程。
+10. Computer Use 只作为人工复核工作法；若用户手动下载 CSV，可用 `render-keyword-watch-html.py --manual-csv` 生成 HTML 报告，但要标注为人工导出数据。
+11. 用户要求“HTML 页面 / 可视化报告”时，优先生成本地静态 HTML，不要只输出 Markdown。
 
 ## 输出要求
 
 - 中文为主
 - 表格优先
 - 必须包含：曲线变化摘要、关键词对比、异常提醒、季节性/持续性判断、下一步动作
+- 如果用户要求 HTML，必须生成 `.html` 文件，并在最终回复给出文件路径
 - 当用户需要长期提醒时，必须给出 Google Trends 订阅和 Google Alerts 设置入口
 - 如果自动抓取失败，直接给复核链接，并写明“未自动确认曲线”
 

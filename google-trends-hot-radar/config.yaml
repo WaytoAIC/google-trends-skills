@@ -1,7 +1,7 @@
 skill:
   name: google-trends-hot-radar
   name_cn: Google Trends 热门词雷达
-  version: 1.1.0
+  version: 1.2.0
   language: zh-CN
   task_type: hot_radar
   description: "从 Google Trends 热门词中发现新品类、新内容、新市场机会。"
@@ -76,6 +76,9 @@ curation_defaults:
 reporting:
   output_language: zh-CN
   tables_first: true
+  html_renderer: scripts/render-hot-radar-html.py
+  html_report_template: templates/hot_radar_report.template.json
+  html_output_dir: reports
   required_sections:
     - executive_summary
     - opportunity_table
