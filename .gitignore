@@ -15,3 +15,4 @@ google-trends-keyword-watch/snapshots/chrome/
 google-trends-keyword-watch/snapshots/playwright/
 google-trends-hot-radar/reports/*.md
 google-trends-keyword-watch/reports/*.md
+.env

@@ -128,6 +128,8 @@ google-trends-hot-radar/scripts/fetch-trending-now.py \
 
 脚本会优先使用已配置的 `SERPAPI_API_KEY` / `SEARCHAPI_API_KEY`；没有商业 provider 时，默认检测本地 Playwright，能用就通过 Playwright 打开 Google Trends Explore 页面，不能用则回落到内置 Chrome CDP provider。浏览器模式按单关键词串行监控，并优先截获页面里的 `widgetdata/multiline` 网络 JSON。若页面返回 429、超时或未截获曲线，会降级为 `manual_review_required`，输出 Google Trends Explore 复核链接、手动导出链接和截图路径。同时，它会输出 Google Trends 订阅和 Google Alerts 设置链接，作为长期监控的辅助提醒层。
 
+**推荐「两手准备」配置（API 主路 + 本地备路）：** 把 `SERPAPI_API_KEY=...` 写进 skill 根目录的 `.env`（已 gitignore，脚本启动自动加载，不写进 shell profile，也不会提交）。`--provider auto` 检测到 key 就走 **SerpApi 主路**（一次调用拿到多词可横向对比的曲线 + Top/Rising 相关词），**API 出错或无数据时自动回落本地浏览器**，绝不让你两手空空。本地浏览器路径受 Google per-IP `429` 限流影响、在部分网络上不稳，因此仅作备路；浏览器路径默认 headed（可见窗口，`headless=new` 下取数 XHR 仍会被 `429`），无人值守可加 `--chrome-headless`。SerpApi 免费额度 250 次/月（每月刷新），一组多词只算 1 次调用，日常监控足够。
+
 示例：
 
 ```bash

@@ -17,8 +17,10 @@ const DEFAULT_CHROME_PATHS = [
 function parseArgs(argv) {
   const args = {
     timeoutMs: 45000,
+    keywordDelayMs: 12000,
     screenshotDir: path.join(os.tmpdir(), "google-trends-keyword-watch-chrome"),
     headless: process.env.GOOGLE_TRENDS_CHROME_HEADLESS !== "0",
+    batch: null,
   };
   for (let idx = 0; idx < argv.length; idx += 1) {
     const key = argv[idx];
@@ -35,12 +37,20 @@ function parseArgs(argv) {
     } else if (key === "--timeout-ms") {
       args.timeoutMs = Number(value);
       idx += 1;
+    } else if (key === "--keyword-delay-ms") {
+      args.keywordDelayMs = Number(value);
+      idx += 1;
+    } else if (key === "--batch-file") {
+      // JSON file: [{ "keyword": "...", "sourceUrl": "..." }, ...]. Lets one warmed
+      // Chrome session serve every keyword instead of relaunching Chrome per term.
+      args.batch = JSON.parse(fs.readFileSync(value, "utf8"));
+      idx += 1;
     } else if (key === "--headed") {
       args.headless = false;
     }
   }
-  if (!args.keyword || !args.sourceUrl) {
-    throw new Error("--keyword and --source-url are required");
+  if ((!args.batch || !args.batch.length) && (!args.keyword || !args.sourceUrl)) {
+    throw new Error("Provide --batch-file, or both --keyword and --source-url");
   }
   return args;
 }
@@ -111,6 +121,12 @@ function parsePrefixedJson(text) {
   }
   return JSON.parse(body);
 }
+
+const CONSENT_CLICK = `
+  [...document.querySelectorAll('button')].find((button) =>
+    /accept all|i agree|agree|接受|同意/i.test(button.innerText || '')
+  )?.click()
+`;
 
 function sanitizeFilePart(value) {
   return value
@@ -232,16 +248,24 @@ async function main() {
     }
   });
 
-  let cdp;
-  const result = {
-    keyword: args.keyword,
-    source_url: args.sourceUrl,
+  // Normalize to a job list so a single warmed Chrome session can serve many keywords.
+  const jobs = args.batch && args.batch.length
+    ? args.batch
+    : [{ keyword: args.keyword, sourceUrl: args.sourceUrl }];
+
+  const newResult = (job) => ({
+    keyword: job.keyword,
+    source_url: job.sourceUrl,
     provider: "chrome",
     chrome_fetch_method: "screenshot_only",
     fetch_status: "manual_review_required",
     timeline_data: [],
     errors: [],
-  };
+  });
+
+  let cdp;
+  let current = null; // per-keyword capture context; the shared listeners act on this
+  const results = [];
 
   try {
     await waitForChrome(port, args.timeoutMs);
@@ -258,16 +282,15 @@ async function main() {
       mobile: false,
     });
 
-    const watchedRequests = new Map();
-    let captureResolve;
-    const capturePromise = new Promise((resolve) => {
-      captureResolve = resolve;
-    });
-
+    // Listeners are registered once on the session and operate on whichever keyword
+    // is "current", so one Chrome process serves the whole keyword batch.
     cdp.on("Network.responseReceived", (params) => {
+      if (!current) {
+        return;
+      }
       const response = params.response || {};
       if (response.url && response.url.includes("/trends/api/widgetdata/multiline")) {
-        watchedRequests.set(params.requestId, {
+        current.watchedRequests.set(params.requestId, {
           url: response.url,
           status: response.status,
           mimeType: response.mimeType,
@@ -276,10 +299,11 @@ async function main() {
     });
 
     cdp.on("Network.loadingFinished", async (params) => {
-      if (!watchedRequests.has(params.requestId) || result.timeline_data.length) {
+      if (!current || !current.watchedRequests.has(params.requestId) || current.result.timeline_data.length) {
         return;
       }
-      const meta = watchedRequests.get(params.requestId);
+      const ctx = current;
+      const meta = ctx.watchedRequests.get(params.requestId);
       try {
         const body = await cdp.send("Network.getResponseBody", { requestId: params.requestId });
         const text = body.base64Encoded
@@ -288,63 +312,94 @@ async function main() {
         const payload = parsePrefixedJson(text);
         const timeline = payload?.default?.timelineData || [];
         if (timeline.length) {
-          result.fetch_status = "success";
-          result.chrome_fetch_method = "network_json";
-          result.response_url = meta.url;
-          result.timeline_data = timeline;
+          ctx.result.fetch_status = "success";
+          ctx.result.chrome_fetch_method = "network_json";
+          ctx.result.response_url = meta.url;
+          ctx.result.timeline_data = timeline;
+          ctx.captureResolve(ctx.result);
         } else {
-          result.errors.push("Chrome captured multiline response, but timelineData was empty");
+          ctx.result.errors.push("Chrome captured multiline response, but timelineData was empty");
         }
       } catch (error) {
-        result.errors.push(`Chrome network parse failed: ${error.message}`);
+        ctx.result.errors.push(`Chrome network parse failed: ${error.message}`);
       }
-      captureResolve(result);
     });
 
-    await cdp.send("Page.navigate", { url: args.sourceUrl });
-    await Promise.race([capturePromise, sleep(args.timeoutMs)]);
-
-    await cdp.send("Runtime.evaluate", {
-      expression: `
-        [...document.querySelectorAll('button')].find((button) =>
-          /accept all|i agree|agree|接受|同意/i.test(button.innerText || '')
-        )?.click()
-      `,
-      awaitPromise: false,
-    }).catch(() => {});
-
-    if (!result.timeline_data.length) {
-      await Promise.race([capturePromise, sleep(8000)]);
+    // Warm up the session ONCE: acquire NID/consent cookies so the per-keyword Explore
+    // XHRs are not page-level 429'd. Reusing one warmed session across all keywords
+    // roughly halves the request count vs. relaunching Chrome per keyword.
+    if (process.env.GOOGLE_TRENDS_CHROME_WARMUP !== "0") {
+      const warmupGeo = (/[?&]geo=([^&]+)/.exec(jobs[0]?.sourceUrl || "") || [])[1] || "US";
+      await cdp.send("Page.navigate", {
+        url: `https://trends.google.com/trends/explore?geo=${warmupGeo}`,
+      }).catch(() => {});
+      await sleep(3500);
+      await cdp.send("Runtime.evaluate", { expression: CONSENT_CLICK, awaitPromise: false }).catch(() => {});
+      await sleep(1500 + Math.floor(Math.random() * 1500));
     }
 
-    const title = await withTimeout(cdp.send("Runtime.evaluate", {
-      expression: "document.title",
-      returnByValue: true,
-    }), 5000, "Reading page title").catch(() => ({ result: { value: "" } }));
-    result.page_title = title?.result?.value || "";
-    if (/error 429|too many requests/i.test(result.page_title) && !result.timeline_data.length) {
-      result.errors.push("Google Trends page returned Error 429 in Chrome");
-    }
+    for (let j = 0; j < jobs.length; j += 1) {
+      const job = jobs[j];
+      const result = newResult(job);
+      results.push(result);
+      let captureResolve;
+      const capturePromise = new Promise((resolve) => {
+        captureResolve = resolve;
+      });
+      current = { result, watchedRequests: new Map(), captureResolve };
 
-    const filename = `${sanitizeFilePart(args.keyword)}-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
-    const screenshotPath = path.join(screenshotDir, filename);
-    const screenshot = await withTimeout(cdp.send("Page.captureScreenshot", {
-      format: "png",
-      captureBeyondViewport: true,
-    }), 8000, "Capturing screenshot").catch((error) => {
-      result.errors.push(error.message);
-      return null;
-    });
-    if (screenshot?.data) {
-      fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, "base64"));
-      result.screenshot_path = screenshotPath;
-    }
+      try {
+        await cdp.send("Page.navigate", { url: job.sourceUrl });
+        await Promise.race([capturePromise, sleep(args.timeoutMs)]);
 
-    if (!result.timeline_data.length && !result.errors.length) {
-      result.errors.push("Chrome did not capture Google Trends multiline data before timeout");
+        await cdp.send("Runtime.evaluate", { expression: CONSENT_CLICK, awaitPromise: false }).catch(() => {});
+
+        if (!result.timeline_data.length) {
+          await Promise.race([capturePromise, sleep(8000)]);
+        }
+
+        const title = await withTimeout(cdp.send("Runtime.evaluate", {
+          expression: "document.title",
+          returnByValue: true,
+        }), 5000, "Reading page title").catch(() => ({ result: { value: "" } }));
+        result.page_title = title?.result?.value || "";
+        if (/error 429|too many requests/i.test(result.page_title) && !result.timeline_data.length) {
+          result.errors.push("Google Trends page returned Error 429 in Chrome");
+        }
+
+        const filename = `${sanitizeFilePart(job.keyword)}-${new Date().toISOString().replace(/[:.]/g, "-")}.png`;
+        const screenshotPath = path.join(screenshotDir, filename);
+        const screenshot = await withTimeout(cdp.send("Page.captureScreenshot", {
+          format: "png",
+          captureBeyondViewport: true,
+        }), 8000, "Capturing screenshot").catch((error) => {
+          result.errors.push(error.message);
+          return null;
+        });
+        if (screenshot?.data) {
+          fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, "base64"));
+          result.screenshot_path = screenshotPath;
+        }
+
+        if (!result.timeline_data.length && !result.errors.length) {
+          result.errors.push("Chrome did not capture Google Trends multiline data before timeout");
+        }
+      } catch (error) {
+        result.errors.push(error.message);
+      } finally {
+        current = null;
+      }
+
+      if (j < jobs.length - 1) {
+        await sleep(args.keywordDelayMs + Math.floor(Math.random() * 4000));
+      }
     }
   } catch (error) {
-    result.errors.push(error.message);
+    if (!results.length) {
+      results.push({ ...newResult(jobs[0] || {}), errors: [error.message] });
+    } else {
+      results[results.length - 1].errors.push(error.message);
+    }
   } finally {
     if (cdp) {
       cdp.close();
@@ -357,10 +412,14 @@ async function main() {
     }
   }
 
-  if (chromeErrors.length && result.fetch_status !== "success") {
-    result.chrome_errors = chromeErrors.slice(-5);
+  for (const result of results) {
+    if (chromeErrors.length && result.fetch_status !== "success") {
+      result.chrome_errors = chromeErrors.slice(-5);
+    }
   }
-  process.stdout.write(JSON.stringify(result, null, 2));
+
+  const output = args.batch && args.batch.length ? { provider: "chrome", results } : results[0];
+  process.stdout.write(JSON.stringify(output, null, 2));
 }
 
 main().catch((error) => {

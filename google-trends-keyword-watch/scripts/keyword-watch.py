@@ -4,6 +4,7 @@ import datetime as dt
 import http.cookiejar
 import json
 import os
+import random
 import statistics
 import subprocess
 import sys
@@ -46,11 +47,12 @@ def normalize_property(value):
     return aliases.get(value, value)
 
 
-def build_source_url(keywords, geo, time_range, trend_property=""):
+def build_source_url(keywords, geo, time_range, trend_property="", hl="en-US"):
     params = {
         "date": time_range,
         "geo": geo,
         "q": ",".join(keywords),
+        "hl": hl,
     }
     if trend_property:
         params["gprop"] = trend_property
@@ -756,6 +758,63 @@ def run_chrome_fetch(keyword, args, source_url, snapshot_file):
     return payload
 
 
+def run_chrome_batch(jobs, args, snapshot_file):
+    """Run every keyword in one warmed Chrome session (warm-up once, reuse cookies).
+
+    jobs: [{"keyword": ..., "sourceUrl": ...}]. Returns {keyword: payload}. This is the
+    rate-limit-friendly path: ~2+N page loads instead of ~3N from relaunching Chrome
+    per keyword, so Google's per-IP budget lasts much longer.
+    """
+    script = Path(__file__).resolve().parent / "chrome-trends-fetch.mjs"
+    if not script.exists():
+        raise RuntimeError(f"Chrome fallback script not found: {script}")
+    batch_dir = chrome_screenshot_dir(snapshot_file)
+    batch_dir.mkdir(parents=True, exist_ok=True)
+    batch_path = batch_dir / "batch-jobs.json"
+    batch_path.write_text(json.dumps(jobs, ensure_ascii=False), encoding="utf-8")
+    cmd = [
+        "node",
+        str(script),
+        "--batch-file",
+        str(batch_path),
+        "--screenshot-dir",
+        str(batch_dir),
+        "--timeout-ms",
+        str(args.chrome_timeout_ms),
+        "--keyword-delay-ms",
+        str(int(args.chrome_keyword_delay * 1000)),
+    ]
+    if args.chrome_headed:
+        cmd.append("--headed")
+    per_keyword = args.chrome_timeout_ms / 1000 + args.chrome_keyword_delay + 20
+    overall_timeout = per_keyword * max(1, len(jobs)) + 60
+    try:
+        completed = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            timeout=overall_timeout,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise RuntimeError("Node.js is required for --provider chrome") from error
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"Chrome batch timed out after {error.timeout} seconds") from error
+
+    if not completed.stdout.strip():
+        detail = completed.stderr.strip() or f"chrome batch exited with code {completed.returncode}"
+        raise RuntimeError(detail)
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        detail = completed.stdout[:500]
+        raise RuntimeError(f"Chrome batch returned non-JSON output: {detail}") from error
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if results is None:
+        results = [payload]
+    return {item.get("keyword"): item for item in results if item.get("keyword")}
+
+
 def run_playwright_fetch(keyword, args, source_url, snapshot_file):
     script = Path(__file__).resolve().parent / "playwright-trends-fetch.mjs"
     if not script.exists():
@@ -800,9 +859,9 @@ def run_playwright_fetch(keyword, args, source_url, snapshot_file):
     return payload
 
 
-def fetch_single_chrome_keyword(keyword, args, snapshot_file):
-    source_url = build_source_url([keyword], args.geo, args.time_range, args.property)
-    payload = run_chrome_fetch(keyword, args, source_url, snapshot_file)
+def build_chrome_record(keyword, source_url, payload, args, snapshot_file):
+    """Turn a single keyword's chrome payload into (record, points, errors, artifact)."""
+    payload = payload or {}
     timeline = payload.get("timeline_data") or []
     errors = payload.get("errors") or []
     artifact = {
@@ -868,24 +927,49 @@ def fetch_single_playwright_keyword(keyword, args, snapshot_file):
 
 
 def fetch_chrome_keyword_data(args, source_url, snapshot_file):
+    keywords = list(args.keywords)
+    source_urls = {
+        kw: build_source_url([kw], args.geo, args.time_range, args.property)
+        for kw in keywords
+    }
+    payloads = {}  # keyword -> latest payload
+
+    # One warmed session serves the whole batch. Retry only the keywords that still
+    # have no curve, on a fresh session with a long backoff. Aggressive retries burn
+    # Google's per-IP budget and trigger a longer cooldown, so keep them few and spaced.
+    attempts = max(1, getattr(args, "chrome_retries", 2))
+    for attempt in range(attempts):
+        pending = [kw for kw in keywords if not (payloads.get(kw) or {}).get("timeline_data")]
+        if not pending:
+            break
+        jobs = [{"keyword": kw, "sourceUrl": source_urls[kw]} for kw in pending]
+        try:
+            batch = run_chrome_batch(jobs, args, snapshot_file)
+        except Exception as error:
+            for kw in pending:
+                payloads.setdefault(kw, {"errors": [str(error)]})
+            batch = {}
+        for kw in pending:
+            if kw in batch:
+                payloads[kw] = batch[kw]
+        still_pending = [kw for kw in keywords if not (payloads.get(kw) or {}).get("timeline_data")]
+        if not still_pending or attempt >= attempts - 1:
+            break
+        time.sleep(25 + attempt * 20 + random.uniform(0, 6))
+
     records = []
     merged_points = {}
     errors = []
     artifacts = []
-    for idx, keyword in enumerate(args.keywords):
-        try:
-            record, keyword_points, keyword_errors, artifact = fetch_single_chrome_keyword(keyword, args, snapshot_file)
-            records.append(record)
-            artifacts.append(artifact)
-            for error in keyword_errors:
-                errors.append(f"{keyword}: {error}")
-            merge_single_keyword_interest_points(merged_points, keyword, keyword_points)
-        except Exception as error:
-            keyword_source_url = build_source_url([keyword], args.geo, args.time_range, args.property)
-            records.extend(manual_review_records([keyword], args.geo, args.time_range, keyword_source_url, error))
+    for keyword in keywords:
+        record, keyword_points, keyword_errors, artifact = build_chrome_record(
+            keyword, source_urls[keyword], payloads.get(keyword), args, snapshot_file
+        )
+        records.append(record)
+        artifacts.append(artifact)
+        for error in keyword_errors:
             errors.append(f"{keyword}: {error}")
-        if idx < len(args.keywords) - 1:
-            time.sleep(2)
+        merge_single_keyword_interest_points(merged_points, keyword, keyword_points)
 
     interest_points = [
         merged_points[key]
@@ -933,7 +1017,10 @@ def fetch_playwright_keyword_data(args, source_url, snapshot_file):
             records.extend(manual_review_records([keyword], args.geo, args.time_range, keyword_source_url, error))
             errors.append(f"{keyword}: {error}")
         if idx < len(args.keywords) - 1:
-            time.sleep(2)
+            # Google Trends rate-limits per IP/session on a time window. Each keyword
+            # relaunches Chrome and re-warms, so back-to-back fetches exhaust the budget
+            # and randomly 429 some terms. Space them out (with jitter) to stay reliable.
+            time.sleep(args.chrome_keyword_delay + random.uniform(0, 6))
 
     interest_points = [
         merged_points[key]
@@ -1053,12 +1140,84 @@ def parse_args():
     parser.add_argument("--mode", choices=["monitor"], default="monitor")
     parser.add_argument("--provider", choices=["auto", "playwright", "chrome", "google", "serpapi", "searchapi"], default="auto")
     parser.add_argument("--chrome-timeout-ms", type=int, default=45000)
-    parser.add_argument("--chrome-headed", action="store_true")
+    # Headed is the default: Google 429s the widgetdata XHR under headless=new even
+    # after session warm-up, but lets it through in a visible window. --chrome-headless
+    # forces headless for unattended runs (expect more manual_review_required results).
+    parser.add_argument("--chrome-headed", action="store_true", default=True)
+    parser.add_argument("--chrome-headless", action="store_true")
+    parser.add_argument("--chrome-retries", type=int, default=2)
+    parser.add_argument("--chrome-keyword-delay", type=float, default=12.0)
     return parser.parse_args()
 
 
+def load_local_env():
+    """Load KEY=VALUE pairs from a gitignored `.env` at the skill root into the
+    environment (without overriding values already set). Lets the SerpApi/SearchApi key
+    persist for every run without writing the secret into the shell profile."""
+    env_path = Path(__file__).resolve().parents[1] / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+    except Exception:
+        pass
+
+
+def fetch_with_provider(provider, args, source_url, snapshot_file):
+    if provider in {"serpapi", "searchapi"}:
+        return fetch_commercial_keyword_data(args, source_url, snapshot_file, provider)
+    if provider == "playwright":
+        return fetch_playwright_keyword_data(args, source_url, snapshot_file)
+    if provider == "chrome":
+        return fetch_chrome_keyword_data(args, source_url, snapshot_file)
+    return fetch_google_keyword_data(args, source_url, snapshot_file)
+
+
+def fetch_keyword_data(provider, requested, args, source_url, snapshot_file):
+    """Run the resolved provider; if a commercial provider was auto-selected and it
+    errors or returns no curve (quota exhausted, outage, bad key), fall back to the local
+    browser path so the user is never left with zero data. This is the two-pronged setup:
+    API primary, local browser backup. A user-pinned --provider is never overridden."""
+    try:
+        result = fetch_with_provider(provider, args, source_url, snapshot_file)
+        error = None
+    except Exception as exc:
+        result, error = None, str(exc)
+
+    commercial = provider in {"serpapi", "searchapi"}
+    empty = result is not None and result.get("fetch_status") == "manual_review_required"
+    if commercial and requested == "auto" and (error or empty):
+        note = (
+            f"commercial provider {provider} "
+            f"{'errored: ' + error if error else 'returned no data'}; fell back to local browser"
+        )
+        try:
+            fallback = fetch_chrome_keyword_data(args, source_url, snapshot_file)
+            fallback.setdefault("errors", []).insert(0, note)
+            fallback["primary_provider"] = provider
+            return fallback
+        except Exception as exc2:
+            error = f"{note}; chrome fallback also failed: {exc2}"
+            result = None
+
+    if result is None:
+        raise RuntimeError(error or "fetch failed")
+    return result
+
+
 def main():
+    load_local_env()
     args = parse_args()
+    if args.chrome_headless:
+        args.chrome_headed = False
     args.property = normalize_property(args.property)
     if args.related_limit <= 0:
         print("--related-limit must be a positive integer", file=sys.stderr)
@@ -1076,14 +1235,7 @@ def main():
 
     provider = resolve_provider(args.provider)
     try:
-        if provider in {"serpapi", "searchapi"}:
-            result = fetch_commercial_keyword_data(args, source_url, snapshot_file, provider)
-        elif provider == "playwright":
-            result = fetch_playwright_keyword_data(args, source_url, snapshot_file)
-        elif provider == "chrome":
-            result = fetch_chrome_keyword_data(args, source_url, snapshot_file)
-        else:
-            result = fetch_google_keyword_data(args, source_url, snapshot_file)
+        result = fetch_keyword_data(provider, args.provider, args, source_url, snapshot_file)
     except Exception as error:
         result = {
             "fetch_status": "manual_review_required",

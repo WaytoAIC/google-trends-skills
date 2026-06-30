@@ -63,9 +63,14 @@ python3 scripts/keyword-watch.py --geo US --time "today 12-m" --keywords "smart 
 脚本能力：
 
 - 每组最多 5 个关键词
-- `--provider auto` 会优先使用 `SERPAPI_API_KEY` / `SEARCHAPI_API_KEY`；没有 key 时检测本地 Playwright，能用就走 `playwright`，否则走真实 Chrome 单关键词监控
+- **两手准备(推荐)**：把 `SERPAPI_API_KEY` 写进 skill 根目录的 `.env`（已 gitignore，脚本启动自动加载，不必写进 shell profile）。`--provider auto` 检测到 key 就走 **SerpApi（稳定主路：一次调用拿多词可横向对比的曲线 + Top/Rising 相关词）**；**API 出错或无数据（配额用尽/断网/坏 key）时自动回落本地浏览器**，绝不让用户两手空空
+- `--provider auto` 没有 key 时检测本地 Playwright，能用就走 `playwright`，否则走真实 Chrome 监控；本地浏览器路径受 Google per-IP 429 限流影响，可能不稳，仅作备路
+- SerpApi 免费额度 250 次/月（每月刷新）；keyword-watch 一组多词只算 1 次调用（不含 `--include-related` 时），日常监控足够
 - Playwright provider 需要 Node 能 `import('playwright')`；不可用时不要报错阻塞，自动回落到 Chrome provider
 - Chrome provider 会打开 Google Trends Explore 页面，优先截获 `widgetdata/multiline` 网络 JSON；失败时保存截图和复核链接
+- Chrome provider 会先访问 Trends 首页**预热 cookie**（拿 NID/同意 cookie）再打 Explore，绕过冷启动的页面级 429；可用 `GOOGLE_TRENDS_CHROME_WARMUP=0` 关闭
+- Chrome provider **默认 headed（可见窗口）**：`headless=new` 下取数 XHR 仍会被 Google 429，只有可见窗口能稳定拿到曲线。无人值守可用 `--chrome-headless` 强制无头（但 `manual_review_required` 会变多）
+- Chrome provider **一次预热、复用同一会话跑完一组所有关键词**（请求数 ~2+N 而非 ~3N），失败的词才在新会话里重试（`--chrome-retries` 默认 2），词间留 `--chrome-keyword-delay`（默认 12s）+jitter，避免打爆 Google 的 per-IP 速率预算触发更长冷却
 - Google Trends 直连 `--provider google` 只作为低频备用，不作为默认路径
 - 无商业 provider 时，只做单词自身曲线监控
 - 尝试自动抓 Google Trends Explore interest-over-time 数据
